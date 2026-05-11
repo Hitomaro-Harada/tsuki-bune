@@ -1,0 +1,10 @@
+{
+  "name": "tsuki-bune",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small WYSIWYG diary prototype that saves readable HTML.",
+  "scripts": {
+    "dev": "python3 -m http.server 5173",
+    "start": "python3 -m http.server 5173"
+  }
+}

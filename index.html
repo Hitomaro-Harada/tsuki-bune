@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>月舟 tsuki-bune</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <button id="aboutOpen" class="brand-mark" type="button" aria-haspopup="dialog" aria-controls="aboutDialog" title="月舟について">月</button>
+          <div>
+            <h1>月舟</h1>
+            <p>tsuki-bune</p>
+          </div>
+        </div>
+        <button id="newEntry" class="primary-button" type="button">新規日記</button>
+        <div class="entry-meta">
+          <label for="entryTitle">タイトル</label>
+          <input id="entryTitle" type="text" autocomplete="off">
+          <label for="entryDate">日付</label>
+          <input id="entryDate" type="date">
+        </div>
+        <section class="file-panel" aria-label="日記ファイル">
+          <div class="button-row">
+            <button id="pickFolder" type="button">日記フォルダ</button>
+            <button id="openHtml" type="button">HTML読込</button>
+          </div>
+          <input id="openHtmlInput" type="file" accept=".html,text/html" hidden>
+          <p id="folderStatus">フォルダ未選択</p>
+          <input id="entrySearch" class="entry-search" type="search" placeholder="日記を検索" autocomplete="off" hidden>
+          <p id="entryCount" class="entry-count" hidden></p>
+          <div id="entryList" class="entry-list" aria-label="フォルダ内HTML"></div>
+        </section>
+        <div class="save-panel">
+          <button id="saveHtml" type="button">HTML保存</button>
+          <p id="saveStatus" aria-live="polite" data-state="idle"></p>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <div class="toolbar" role="toolbar" aria-label="編集ツール">
+          <button type="button" data-command="bold" title="太字"><strong>B</strong></button>
+          <button type="button" data-command="underline" title="下線"><span class="underline">U</span></button>
+          <button type="button" data-command="strikeThrough" title="取り消し線"><span class="strike">S</span></button>
+          <div class="format-picker" id="blockFormatPicker">
+            <button id="blockFormatToggle" class="picker-toggle" type="button" aria-haspopup="true" aria-expanded="false">本文</button>
+            <div id="blockFormatMenu" class="picker-menu format-menu" role="menu" aria-label="見出し" hidden>
+              <button type="button" role="menuitem" data-block-format="P" class="format-option format-option-body">本文</button>
+              <button type="button" role="menuitem" data-block-format="H1" class="format-option format-option-h1">見出し1</button>
+              <button type="button" role="menuitem" data-block-format="H2" class="format-option format-option-h2">見出し2</button>
+              <button type="button" role="menuitem" data-block-format="H3" class="format-option format-option-h3">見出し3</button>
+            </div>
+          </div>
+          <div class="size-picker" id="fontSizePicker">
+            <button id="fontSizeToggle" class="picker-toggle" type="button" aria-haspopup="true" aria-expanded="false">文字サイズ</button>
+            <div id="fontSizeMenu" class="picker-menu size-menu" role="menu" aria-label="文字サイズ" hidden>
+              <button type="button" role="menuitem" data-font-size="200%" class="size-option size-option-large">大 (200%)</button>
+              <button type="button" role="menuitem" data-font-size="150%" class="size-option size-option-medium">中 (150%)</button>
+              <button type="button" role="menuitem" data-font-size="100%" class="size-option size-option-normal">標準 (100%)</button>
+              <button type="button" role="menuitem" data-font-size="80%" class="size-option size-option-small">小 (80%)</button>
+            </div>
+          </div>
+          <div class="swatch-group" aria-label="文字色パレット">
+            <button class="swatch-button" type="button" data-text-color="#1f2937" title="黒" aria-label="黒" style="--swatch-color: #1f2937"></button>
+            <button class="swatch-button" type="button" data-text-color="#c2410c" title="赤" aria-label="赤" style="--swatch-color: #c2410c"></button>
+            <button class="swatch-button" type="button" data-text-color="#1d4ed8" title="青" aria-label="青" style="--swatch-color: #1d4ed8"></button>
+            <button class="swatch-button" type="button" data-text-color="#6b7280" title="灰色" aria-label="灰色" style="--swatch-color: #6b7280"></button>
+          </div>
+          <div class="swatch-group" aria-label="蛍光ペンパレット">
+            <button class="swatch-button" type="button" data-highlight-color="#fff3a3" title="黄色" aria-label="黄色" style="--swatch-color: #fff3a3"></button>
+            <button class="swatch-button" type="button" data-highlight-color="#baf7c4" title="緑色" aria-label="緑色" style="--swatch-color: #baf7c4"></button>
+          </div>
+          <button type="button" data-command="insertUnorderedList" title="箇条書き">箇条書き</button>
+          <button type="button" data-command="removeFormat" title="書式クリア">書式クリア</button>
+        </div>
+
+        <section class="paper" aria-label="日記本文">
+          <div id="editor" class="editor" contenteditable="true" spellcheck="true"></div>
+        </section>
+      </main>
+    </div>
+    <div id="aboutDialog" class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
+      <div class="about-backdrop" data-about-close></div>
+      <section class="about-panel">
+        <header class="about-header">
+          <div>
+            <p>tsuki-bune</p>
+            <h2 id="aboutTitle">月舟について</h2>
+          </div>
+          <button id="aboutClose" class="about-close" type="button" aria-label="閉じる">×</button>
+        </header>
+        <div class="about-content">
+          <h3>どんなWebアプリ？</h3>
+          <p>月舟(tsuki-bune)は、<strong>日記をHTMLで書くためのWebアプリ</strong>です。</p>
+          <p>wordのように見たまま書けて、MarkdownのようにAIやgitにも扱いやすいファイルを残すための日記アプリです。</p>
+          <p>アカウント不要、日記はローカルに保存、内容は外部送信を行いません。自分のパソコンの中に人生を記したファイル(人生レポジトリ)を作りましょう。</p>
+
+          <h3>月舟が大事にすること</h3>
+          <ul>
+            <li>サクサク軽く動く</li>
+            <li>開いてすぐ書ける</li>
+            <li>アカウントなしで使える</li>
+            <li>日記内容を勝手に外部送信しない</li>
+            <li>HTMLとして読める形で保存する</li>
+            <li>パソコン初心者にも迷いにくい</li>
+            <li>機能を増やしすぎず、明瞭である</li>
+          </ul>
+
+          <h3>基本の使い方</h3>
+          <ol>
+            <li>日記フォルダを作って選択</li>
+            <li>新規日記を書く</li>
+            <li>太字、下線、文字色、蛍光ペン、画像貼り付けなどを使えます。</li>
+            <li><kbd>Ctrl+S</kbd> または <kbd>Cmd+S</kbd> でHTMLとして保存します。</li>
+            <li>保存したHTMLは、ブラウザやエディタでも開けます。</li>
+          </ol>
+          <p>Chrome / Edgeでは、日記フォルダへ直接保存できます。対応していないブラウザでは、HTML読込やダウンロード保存で使えます。</p>
+
+          <h3>目指していること</h3>
+          <p>月舟は、”エンジニア”でなくても人生レポジトリを作れるようにするためのアプリです。</p>
+          <p>AIはとても賢くなっていますが、その人の背景、日々の生活、考え方、好み、過去の出来事を知らないと、気の利いた返答ができないことがあります。</p>
+          <p>日々の記録が読みやすい形で残っていれば、将来AIに自分の背景を伝えやすくなります。月舟は、そのための文章を無理なく残せる場所を目指しています。</p>
+
+          <h3>支援について</h3>
+          <p>月舟は、まず無料で使える軽いアプリとして公開する予定です。</p>
+          <p>将来的には、開発を応援したい人向けに Buy Me a Coffee などの支援リンクを置く可能性があります。</p>
+          <p>ただし、支援やマネタイズが日記を書く体験の邪魔にならないことを大事にします。</p>
+        </div>
+      </section>
+    </div>
+    <script src="app.js?v=20260511-assets-cleanup"></script>
+  </body>
+</html>
