@@ -4,19 +4,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>月舟 tsuki-bune</title>
-    <link rel="stylesheet" href="styles.css">
+    <script>
+      // Prevent flash of wrong theme: apply the saved choice before the page renders.
+      try {
+        var savedTheme = localStorage.getItem("tsuki-bune:theme");
+        if (savedTheme === "dark" || savedTheme === "light") {
+          document.documentElement.setAttribute("data-theme", savedTheme);
+        }
+      } catch (error) {
+        /* localStorage unavailable; fall back to OS preference. */
+      }
+    </script>
+    <link rel="stylesheet" href="styles.css?v=20260531-editor-focus">
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <button id="aboutOpen" class="brand-mark" type="button" aria-haspopup="dialog" aria-controls="aboutDialog" title="月舟について">月</button>
-          <div>
-            <h1>月舟</h1>
-            <p>tsuki-bune</p>
-          </div>
+          <h1 class="brand-name"><button id="aboutOpen" class="brand-link" type="button" aria-haspopup="dialog" aria-controls="aboutDialog" title="月舟について">月舟</button></h1>
+          <p>tsuki-bune</p>
         </div>
-        <button id="newEntry" class="primary-button" type="button">新規日記</button>
+        <button id="newEntry" class="primary-button" type="button">新しい日記を作る</button>
         <div class="entry-meta">
           <label for="entryTitle">タイトル</label>
           <input id="entryTitle" type="text" autocomplete="off">
@@ -38,6 +46,7 @@
           <button id="saveHtml" type="button">HTML保存</button>
           <p id="saveStatus" aria-live="polite" data-state="idle"></p>
         </div>
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="ダークモード切替" title="ダークモード切替">☾</button>
       </aside>
 
       <main class="workspace">
@@ -54,14 +63,12 @@
               <button type="button" role="menuitem" data-block-format="H3" class="format-option format-option-h3">見出し3</button>
             </div>
           </div>
-          <div class="size-picker" id="fontSizePicker">
-            <button id="fontSizeToggle" class="picker-toggle" type="button" aria-haspopup="true" aria-expanded="false">文字サイズ</button>
-            <div id="fontSizeMenu" class="picker-menu size-menu" role="menu" aria-label="文字サイズ" hidden>
-              <button type="button" role="menuitem" data-font-size="200%" class="size-option size-option-large">大 (200%)</button>
-              <button type="button" role="menuitem" data-font-size="150%" class="size-option size-option-medium">中 (150%)</button>
-              <button type="button" role="menuitem" data-font-size="100%" class="size-option size-option-normal">標準 (100%)</button>
-              <button type="button" role="menuitem" data-font-size="80%" class="size-option size-option-small">小 (80%)</button>
-            </div>
+          <div class="font-size-controls" aria-label="文字サイズ">
+            <button type="button" data-font-size-step="-2" title="2段階小さく" aria-label="2段階小さく">--</button>
+            <button type="button" data-font-size-step="-1" title="1段階小さく" aria-label="1段階小さく">-</button>
+            <button type="button" data-font-size-standard title="標準サイズに戻す">標準</button>
+            <button type="button" data-font-size-step="1" title="1段階大きく" aria-label="1段階大きく">+</button>
+            <button type="button" data-font-size-step="2" title="2段階大きく" aria-label="2段階大きく">++</button>
           </div>
           <div class="swatch-group" aria-label="文字色パレット">
             <button class="swatch-button" type="button" data-text-color="#1f2937" title="黒" aria-label="黒" style="--swatch-color: #1f2937"></button>
@@ -74,13 +81,23 @@
             <button class="swatch-button" type="button" data-highlight-color="#baf7c4" title="緑色" aria-label="緑色" style="--swatch-color: #baf7c4"></button>
           </div>
           <button type="button" data-command="insertUnorderedList" title="箇条書き">箇条書き</button>
-          <button type="button" data-command="removeFormat" title="書式クリア">書式クリア</button>
+          <button type="button" data-command="removeFormat" title="書式クリア（Ctrl+Space）">書式クリア</button>
         </div>
 
         <section class="paper" aria-label="日記本文">
           <div id="editor" class="editor" contenteditable="true" spellcheck="true"></div>
         </section>
       </main>
+    </div>
+    <div id="flickPalette" class="flick-palette" aria-hidden="true" hidden>
+      <div class="flick-palette-indicator"></div>
+      <div class="flick-palette-center"></div>
+      <div class="flick-palette-item flick-palette-item-up" data-flick-direction="up">黒</div>
+      <div class="flick-palette-item flick-palette-item-up-right" data-flick-direction="upRight">赤</div>
+      <div class="flick-palette-item flick-palette-item-down-right" data-flick-direction="downRight">青</div>
+      <div class="flick-palette-item flick-palette-item-down flick-palette-item-clear" data-flick-direction="down"><span>書式</span><span>クリア</span></div>
+      <div class="flick-palette-item flick-palette-item-down-left" data-flick-direction="downLeft">緑</div>
+      <div class="flick-palette-item flick-palette-item-up-left" data-flick-direction="upLeft">黄</div>
     </div>
     <div id="aboutDialog" class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
       <div class="about-backdrop" data-about-close></div>
@@ -131,6 +148,6 @@
         </div>
       </section>
     </div>
-    <script src="app.js?v=20260511-assets-cleanup"></script>
+    <script src="app.js?v=20260531-editor-focus"></script>
   </body>
 </html>

@@ -18,11 +18,37 @@ const aboutCloseButton = document.querySelector("#aboutClose");
 const blockFormatPicker = document.querySelector("#blockFormatPicker");
 const blockFormatToggle = document.querySelector("#blockFormatToggle");
 const blockFormatMenu = document.querySelector("#blockFormatMenu");
-const fontSizePicker = document.querySelector("#fontSizePicker");
-const fontSizeToggle = document.querySelector("#fontSizeToggle");
-const fontSizeMenu = document.querySelector("#fontSizeMenu");
+const flickPalette = document.querySelector("#flickPalette");
+const themeToggle = document.querySelector("#themeToggle");
 
 const today = new Date().toISOString().slice(0, 10);
+const FONT_SIZE_STEPS = [
+  { percent: 80, value: "0.8rem" },
+  { percent: 90, value: "0.9rem" },
+  { percent: 100, value: "1rem" },
+  { percent: 120, value: "1.2rem" },
+  { percent: 150, value: "1.5rem" },
+  { percent: 200, value: "2rem" }
+];
+const FLICK_PALETTE_HOLD_DELAY = 150;
+const FLICK_PALETTE_THRESHOLD = 28;
+const FLICK_PALETTE_ACTIONS = {
+  up: () => applyInlineStyle({ color: "#1f2937" }),
+  upRight: () => applyInlineStyle({ color: "#c2410c" }),
+  downRight: () => applyInlineStyle({ color: "#1d4ed8" }),
+  down: () => exec("removeFormat"),
+  downLeft: () => applyInlineStyle({ backgroundColor: "#baf7c4" }),
+  upLeft: () => applyInlineStyle({ backgroundColor: "#fff3a3" })
+};
+const FLICK_PALETTE_DIRECTIONS = ["upRight", "downRight", "down", "downLeft", "upLeft", "up"];
+const FLICK_PALETTE_ANGLES = {
+  up: -90,
+  upRight: -30,
+  downRight: 30,
+  down: 90,
+  downLeft: 150,
+  upLeft: -150
+};
 let savedRange = null;
 let directoryHandle = null;
 let currentFileHandle = null;
@@ -33,6 +59,9 @@ let hasUnsavedChanges = false;
 let cleanEntrySnapshot = "";
 let entryFiles = [];
 const previewObjectUrls = new Map();
+let lastPointerPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+let flickPaletteTimer = null;
+let flickPaletteState = null;
 
 function defaultEntry() {
   return {
@@ -118,6 +147,116 @@ function restoreSelection() {
   selection.addRange(savedRange);
 }
 
+function hasEditorTextSelection() {
+  const selection = window.getSelection();
+  if (!selection.rangeCount || selection.isCollapsed) {
+    return false;
+  }
+
+  return editor.contains(selection.getRangeAt(0).commonAncestorContainer);
+}
+
+function getFlickPaletteRadius() {
+  return Math.min(Math.max(Math.min(window.innerWidth, window.innerHeight) * 0.06, 42), 64);
+}
+
+function clampFlickPalettePosition(position) {
+  const margin = getFlickPaletteRadius() + 28;
+
+  return {
+    x: Math.min(Math.max(position.x, margin), window.innerWidth - margin),
+    y: Math.min(Math.max(position.y, margin), window.innerHeight - margin)
+  };
+}
+
+function setFlickPaletteDirection(direction) {
+  if (!flickPaletteState || flickPaletteState.direction === direction) {
+    return;
+  }
+
+  flickPaletteState.direction = direction;
+  flickPalette.classList.toggle("has-direction", Boolean(direction));
+  if (direction) {
+    flickPalette.style.setProperty("--flick-angle", `${FLICK_PALETTE_ANGLES[direction]}deg`);
+  }
+  flickPalette.querySelectorAll("[data-flick-direction]").forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.flickDirection === direction);
+  });
+}
+
+function getFlickPaletteDirection(pointerPosition) {
+  if (!flickPaletteState) {
+    return "";
+  }
+
+  const dx = pointerPosition.x - flickPaletteState.origin.x;
+  const dy = pointerPosition.y - flickPaletteState.origin.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance < FLICK_PALETTE_THRESHOLD) {
+    return "";
+  }
+
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const normalizedAngle = (angle + 360 + 30) % 360;
+  const directionIndex = Math.floor(normalizedAngle / 60);
+
+  return FLICK_PALETTE_DIRECTIONS[directionIndex];
+}
+
+function showFlickPalette(position) {
+  const origin = clampFlickPalettePosition(position);
+
+  saveSelection();
+  flickPaletteState = { origin, direction: "" };
+  flickPalette.style.setProperty("--flick-x", `${origin.x}px`);
+  flickPalette.style.setProperty("--flick-y", `${origin.y}px`);
+  flickPalette.hidden = false;
+  flickPalette.setAttribute("aria-hidden", "false");
+  setFlickPaletteDirection(getFlickPaletteDirection(lastPointerPosition));
+}
+
+function cancelFlickPalette() {
+  window.clearTimeout(flickPaletteTimer);
+  flickPaletteTimer = null;
+  flickPaletteState = null;
+  flickPalette.hidden = true;
+  flickPalette.setAttribute("aria-hidden", "true");
+  flickPalette.classList.remove("has-direction");
+  flickPalette.querySelectorAll("[data-flick-direction]").forEach((item) => {
+    item.classList.remove("is-active");
+  });
+}
+
+function scheduleFlickPalette() {
+  if (flickPaletteTimer || flickPaletteState || !hasEditorTextSelection()) {
+    return;
+  }
+
+  const origin = lastPointerPosition;
+  flickPaletteTimer = window.setTimeout(() => {
+    flickPaletteTimer = null;
+    if (hasEditorTextSelection()) {
+      showFlickPalette(origin);
+    }
+  }, FLICK_PALETTE_HOLD_DELAY);
+}
+
+function commitFlickPalette() {
+  if (!flickPaletteState) {
+    cancelFlickPalette();
+    return;
+  }
+
+  const direction = flickPaletteState.direction;
+  const action = FLICK_PALETTE_ACTIONS[direction];
+  cancelFlickPalette();
+
+  if (action) {
+    action();
+  }
+}
+
 function exec(command, value = null) {
   restoreSelection();
   document.execCommand(command, false, value);
@@ -159,6 +298,27 @@ function insertNodeAtSelection(node) {
   markEntryChanged();
 }
 
+function getElementStyleAttribute(element) {
+  return element.getAttribute("style") || "";
+}
+
+function removeEmptyStyleAttribute(element) {
+  if (!getElementStyleAttribute(element).trim()) {
+    element.removeAttribute("style");
+  }
+}
+
+function removeInlineStyle(root, property) {
+  if (!root.querySelectorAll) {
+    return;
+  }
+
+  root.querySelectorAll("*").forEach((element) => {
+    element.style[property] = "";
+    removeEmptyStyleAttribute(element);
+  });
+}
+
 function applyInlineStyle(styles) {
   restoreSelection();
 
@@ -169,18 +329,129 @@ function applyInlineStyle(styles) {
 
   const range = selection.getRangeAt(0);
   const span = document.createElement("span");
+  const fragment = range.extractContents();
 
   Object.entries(styles).forEach(([property, value]) => {
+    removeInlineStyle(fragment, property);
     span.style[property] = value;
   });
 
-  span.append(range.extractContents());
+  span.append(fragment);
   range.insertNode(span);
   range.selectNodeContents(span);
   selection.removeAllRanges();
   selection.addRange(range);
   saveSelection();
   markEntryChanged();
+}
+
+function getNodeElement(node) {
+  return node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+}
+
+function getOutermostStyleAncestor(node, property) {
+  let element = getNodeElement(node);
+  let matchingElement = null;
+
+  while (element && element !== editor) {
+    if (element.style[property]) {
+      matchingElement = element;
+    }
+    element = element.parentElement;
+  }
+
+  return matchingElement;
+}
+
+function getRangeStyleAncestor(range, property) {
+  const startAncestor = getOutermostStyleAncestor(range.startContainer, property);
+  const endAncestor = getOutermostStyleAncestor(range.endContainer, property);
+
+  if (startAncestor && startAncestor.contains(range.endContainer)) {
+    return startAncestor;
+  }
+
+  if (endAncestor && endAncestor.contains(range.startContainer)) {
+    return endAncestor;
+  }
+
+  return null;
+}
+
+function getSelectionFontSizePercent() {
+  restoreSelection();
+
+  const selection = window.getSelection();
+  if (!selection.rangeCount) {
+    return 100;
+  }
+
+  const range = selection.getRangeAt(0);
+  const node = range.startContainer.nodeType === Node.ELEMENT_NODE
+    ? range.startContainer
+    : range.startContainer.parentElement;
+  const baseSize = Number.parseFloat(getComputedStyle(editor).fontSize) || 16;
+  const selectedSize = node
+    ? Number.parseFloat(getComputedStyle(node).fontSize)
+    : baseSize;
+
+  return Math.round((selectedSize / baseSize) * 100);
+}
+
+function getNearestFontSizeStepIndex(percent) {
+  return FONT_SIZE_STEPS.reduce((nearestIndex, step, index) => {
+    const nearestDistance = Math.abs(FONT_SIZE_STEPS[nearestIndex].percent - percent);
+    const currentDistance = Math.abs(step.percent - percent);
+    return currentDistance < nearestDistance ? index : nearestIndex;
+  }, 0);
+}
+
+function applyFontSize(value) {
+  restoreSelection();
+
+  const selection = window.getSelection();
+  if (!selection.rangeCount || selection.isCollapsed) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const existingFontSizeAncestor = getRangeStyleAncestor(range, "fontSize");
+
+  if (existingFontSizeAncestor) {
+    removeInlineStyle(existingFontSizeAncestor, "fontSize");
+    existingFontSizeAncestor.style.fontSize = value;
+    removeEmptyStyleAttribute(existingFontSizeAncestor);
+    range.selectNodeContents(existingFontSizeAncestor);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    saveSelection();
+    markEntryChanged();
+    return;
+  }
+
+  const span = document.createElement("span");
+  const fragment = range.extractContents();
+  removeInlineStyle(fragment, "fontSize");
+  if (value) {
+    span.style.fontSize = value;
+  }
+  span.append(fragment);
+  range.insertNode(span);
+  range.selectNodeContents(span);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  saveSelection();
+  markEntryChanged();
+}
+
+function applyRelativeFontSize(delta) {
+  const currentIndex = getNearestFontSizeStepIndex(getSelectionFontSizePercent());
+  const nextIndex = Math.max(0, Math.min(FONT_SIZE_STEPS.length - 1, currentIndex + delta));
+  applyFontSize(FONT_SIZE_STEPS[nextIndex].value);
+}
+
+function resetFontSize() {
+  applyFontSize("");
 }
 
 function escapeHtml(value) {
@@ -877,10 +1148,9 @@ function openPickerMenu(menu, toggle) {
 
 function closeToolbarMenus() {
   closePickerMenu(blockFormatMenu, blockFormatToggle);
-  closePickerMenu(fontSizeMenu, fontSizeToggle);
 }
 
-[blockFormatPicker, fontSizePicker].forEach((picker) => {
+[blockFormatPicker].forEach((picker) => {
   picker.addEventListener("mousedown", (event) => {
     event.preventDefault();
   });
@@ -888,7 +1158,6 @@ function closeToolbarMenus() {
 
 blockFormatToggle.addEventListener("click", () => {
   if (blockFormatMenu.hidden) {
-    closePickerMenu(fontSizeMenu, fontSizeToggle);
     openPickerMenu(blockFormatMenu, blockFormatToggle);
   } else {
     closePickerMenu(blockFormatMenu, blockFormatToggle);
@@ -902,30 +1171,32 @@ blockFormatMenu.querySelectorAll("[data-block-format]").forEach((button) => {
   });
 });
 
-fontSizeToggle.addEventListener("click", () => {
-  if (fontSizeMenu.hidden) {
-    closePickerMenu(blockFormatMenu, blockFormatToggle);
-    openPickerMenu(fontSizeMenu, fontSizeToggle);
-  } else {
-    closePickerMenu(fontSizeMenu, fontSizeToggle);
-  }
-});
-
-fontSizeMenu.querySelectorAll("[data-font-size]").forEach((button) => {
+document.querySelectorAll("[data-font-size-step]").forEach((button) => {
   button.addEventListener("click", () => {
-    applyInlineStyle({ fontSize: button.dataset.fontSize });
-    closePickerMenu(fontSizeMenu, fontSizeToggle);
+    applyRelativeFontSize(Number(button.dataset.fontSizeStep));
   });
 });
 
+document.querySelector("[data-font-size-standard]").addEventListener("click", () => {
+  resetFontSize();
+});
+
 document.addEventListener("click", (event) => {
-  if (!blockFormatPicker.contains(event.target) && !fontSizePicker.contains(event.target)) {
+  if (!blockFormatPicker.contains(event.target)) {
     closeToolbarMenus();
+  }
+});
+
+document.addEventListener("pointermove", (event) => {
+  lastPointerPosition = { x: event.clientX, y: event.clientY };
+  if (flickPaletteState) {
+    setFlickPaletteDirection(getFlickPaletteDirection(lastPointerPosition));
   }
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    cancelFlickPalette();
     closeToolbarMenus();
     if (!aboutDialog.hidden) {
       closeAboutDialog();
@@ -947,17 +1218,78 @@ document.querySelectorAll("[data-highlight-color]").forEach((button) => {
   button.addEventListener("click", () => applyInlineStyle({ backgroundColor: button.dataset.highlightColor }));
 });
 
+const THEME_STORAGE_KEY = "tsuki-bune:theme";
+
+function currentEffectiveTheme() {
+  const forced = document.documentElement.getAttribute("data-theme");
+  if (forced === "dark" || forced === "light") {
+    return forced;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function updateThemeToggle() {
+  const isDark = currentEffectiveTheme() === "dark";
+  // Show the icon for the action: sun while dark (switch to light), moon while light.
+  themeToggle.textContent = isDark ? "☀" : "☾";
+  themeToggle.setAttribute(
+    "aria-label",
+    isDark ? "ライトモードに切替" : "ダークモードに切替"
+  );
+  themeToggle.title = themeToggle.getAttribute("aria-label");
+}
+
+function toggleTheme() {
+  const next = currentEffectiveTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch (error) {
+    /* localStorage unavailable; theme still applies for this session. */
+  }
+  updateThemeToggle();
+}
+
+themeToggle.addEventListener("click", toggleTheme);
+updateThemeToggle();
+
 document.querySelector("#saveHtml").addEventListener("click", saveEntry);
 
 document.addEventListener("keydown", (event) => {
   const isSaveShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s";
-  if (!isSaveShortcut) {
+  const isClearFormatShortcut = event.ctrlKey && event.code === "Space";
+
+  if (event.key !== "Control" && event.ctrlKey) {
+    cancelFlickPalette();
+  }
+
+  if (event.key === "Control" && !event.repeat) {
+    scheduleFlickPalette();
     return;
   }
 
-  event.preventDefault();
-  saveEntry();
+  if (isSaveShortcut) {
+    event.preventDefault();
+    saveEntry();
+    return;
+  }
+
+  if (isClearFormatShortcut) {
+    event.preventDefault();
+    cancelFlickPalette();
+    exec("removeFormat");
+    return;
+  }
 });
+
+document.addEventListener("keyup", (event) => {
+  if (event.key === "Control") {
+    event.preventDefault();
+    commitFlickPalette();
+  }
+});
+
+window.addEventListener("blur", cancelFlickPalette);
 
 pickFolderButton.addEventListener("click", pickDiaryFolder);
 
@@ -1004,6 +1336,9 @@ editor.addEventListener("paste", (event) => {
 renderEntry(loadEntry());
 cleanEntrySnapshot = getEntrySnapshot();
 setSaveStatus("");
+
+// 起動時に本文へフォーカスを当て、クリックなしですぐ書けるようにする
+editor.focus();
 
 if (!("showDirectoryPicker" in window)) {
   pickFolderButton.disabled = true;
